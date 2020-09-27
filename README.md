@@ -8,15 +8,15 @@
 
 3. Learning process with Classification algorithms
 
-    . KNN
-    . LDA
-    . Logistic regression
-    . Support Vector Machines (SVM)
+    . KNN  
+    . LDA  
+    . Logistic regression  
+    . Support Vector Machines (SVM)  
     
 4. Clustering
 
-    . K-means
-    . Hierarchical Clustering
-    . EM algorithm and the Gaussian mixture model (GMM)
-    . Dimension reduction (using PCA)
-    . Clustering in High Dimension using HDclassif
+    . K-means  
+    . Hierarchical Clustering  
+    . EM algorithm and the Gaussian mixture model (GMM)  
+    . Dimension reduction (using PCA)  
+    . Clustering in High Dimension using HDclassif  

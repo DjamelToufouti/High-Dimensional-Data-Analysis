@@ -2,7 +2,7 @@
 
 ## Based on DSTI class with Pr. Charles Bouveyron
 
-1. Reminder on Descriptive Analysis
+1. [Reminder on Descriptive Analysis](Descriptive-Analysis.md)
 
 2. Learning process with Regression
 

@@ -3,6 +3,14 @@ title: "Clustering"
 output: github_document
 ---
 
+---
+title: "Clustering"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
 # Clustering
 
 ## The kmeans

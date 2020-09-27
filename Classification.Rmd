@@ -2,6 +2,13 @@
 title: "Learning process with Classification algorithms"
 output: github_document
 ---
+---
+title: "Learning process with Classification algorithms"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
 
 # Classification with kNN, logistic regression and LDA
 
@@ -140,7 +147,6 @@ The logistic regression is available in R thanks to the `glm` function. Let's re
 
 ```{r message=FALSE}
 data("banknote")
-banknote
 X = banknote[,-1] # remove target variable 'Status'
 Y = banknote$Status # Status variable is counterfeit (= 1) or genuine (= 2)
 

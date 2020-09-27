@@ -1,0 +1,493 @@
+---
+title: "Learning process with Classification algorithms"
+output: github_document
+---
+
+# Classification with kNN, logistic regression and LDA
+
+So, let's consider some data:
+
+```{r message=FALSE}
+library(MBCbook)
+data("wine27")
+data("banknote")
+```
+
+
+## KNN
+
+Let's use kNN to try classify those data:
+
+```{r}
+N = nrow(wine27)
+X = wine27[,1:27]
+Y = wine27$Type
+train = sample(1:N,150)
+
+# Use knn to classify
+library(class)
+knn.out = knn(X[train,],X[-train,],Y[train],k=3) # k-nearest neighbour classification for test set from training set
+```
+
+```{r}
+knn.out
+```
+
+We can now compute the validation error:
+
+```{r}
+sum(knn.out != Y[-train]) / length(knn.out)
+```
+
+Let's try now the LOO-CV to get a better estimate of the error of kNN on these data:
+
+```{r}
+ErrCV = rep(NA,N)
+# Estimation of the error with LOO-CV
+for (i in 1:nrow(X)){
+  # Split between train and validation
+  train = seq(1,nrow(X))[-i]
+  
+  # Learning step
+  knn.out = knn(X[train,],X[-train,],Y[train],k=3)
+  
+  # compute the error
+  ErrCV[i] = sum(knn.out != Y[-train]) / length(knn.out)
+}
+
+mean(ErrCV)
+```
+
+We can observe that the 3-NN produces an average classification error around 20%, which is not very satisfying. A way to improve it is to test other values of k and to use CV for pick the most appropriate k for those data :
+
+```{r}
+ErrCV = matrix(NA,N,25)
+
+for (k in 1:25){
+  for (i in 1:nrow(X)){
+    # Split between train and validation
+    train = seq(1,nrow(X))[-i]
+    
+    # Learning step
+    knn.out = knn(X[train,],X[-train,],Y[train],k=k)
+    
+    # cmopute the error
+    ErrCV[i,k] = sum(knn.out != Y[-train]) / length(knn.out)
+  }
+}
+
+plot(colMeans(ErrCV),type='b')
+which.min(colMeans(ErrCV))
+```
+
+
+It turns out that the best solution that we can have with KNN is with k=9.
+
+
+
+## LDA
+
+Let's now use LDA to classify the same data:
+
+```{r}
+N = nrow(wine27)
+X = wine27[,1:27]
+Y = wine27$Type
+train = sample(1:N,150)
+
+# LDA learning step
+library(MASS)
+lda.fit = lda(X[train,],Y[train])
+
+# LDA prediction step
+yhat = predict(lda.fit,X[-train,])$class
+
+# Validation error
+sum(yhat != Y[-train]) / length(yhat)
+```
+
+> Note: the estimated classifier `lda.fit` contains the maximum likelihood estimates for model parameters (lda.fit$prior = pi, lda.fit$means = mu, lda.fit$scaling = Sigma).
+
+
+Let's now use LOO-CV to get a good estimate of the actual classification error of LDA for this wine classification problem :
+
+
+```{r}
+ErrCV = rep(NA,N)
+# Estimation of the error with LOO-CV
+for (i in 1:nrow(X)){
+  # Split between train and validation
+  train = seq(1,nrow(X))[-i]
+  
+  # Learning and classification step
+  lda.fit = lda(X[train,],Y[train])
+  yhat = predict(lda.fit,X[-train,])$class
+  
+  # compute the error
+  ErrCV[i] = sum(yhat != Y[-train]) / length(yhat)
+}
+
+mean(ErrCV)
+```
+
+So, for this wine classification problem, LDA clearly outperforms kNN. This decision is based on the respective evaluations of the classification error with LOO-CV for LDA (0.01 ) and kNN (0.18 with k=9).
+
+
+
+## Logistic regression
+
+The logistic regression is available in R thanks to the `glm` function. Let's recall that this method is limited to binary classification. Let's therefore consider a different classification problem for now: the detection of counterfeit bank notes.
+
+```{r message=FALSE}
+data("banknote")
+banknote
+X = banknote[,-1] # remove target variable 'Status'
+Y = banknote$Status # Status variable is counterfeit (= 1) or genuine (= 2)
+
+# Split into train / validation
+train = sample(1:nrow(X),0.75*nrow(X))
+
+# Learn the logistic regression model
+f = glm(Status ~ ., data = banknote, subset = train, family = 'binomial')
+
+# Classify the validation data
+log.out = predict(f, newdata = X[-train,])
+yhat = as.numeric(log.out > 0) + 1 
+
+# Compute the classification error
+sum(yhat != as.numeric(Y[-train])) / sum(yhat)
+```
+
+So, finally, we can now compare on this problem kNN, LDA and logistic regression, thanks to LOO-CV. 
+
+
+If we would like to do in the best way, we first have to select the most appropriate k for KNN on this problem :
+
+```{r}
+N = nrow(X)
+ErrCV = matrix(NA,N,25)
+for (k in 1:25){
+  for (i in 1:nrow(X)){
+    # Split between train and validation
+    train = seq(1,nrow(X))[-i]
+    
+    # Learning step
+    knn.out = knn(X[train,],X[-train,],Y[train],k=k)
+    
+    # compute the error
+    ErrCV[i,k] = sum(knn.out != Y[-train]) / length(knn.out)
+  }
+}
+
+plot(colMeans(ErrCV),type='b')
+kstar = which.min(colMeans(ErrCV))
+```
+
+And now, we can compare LDA, LReg and KNN (k=kstar)
+
+```{r warning = FALSE}
+ErrCV.kNN = rep(NA,N)
+ErrCV.LDA = rep(NA,N)
+ErrCV.LReg = rep(NA,N)
+
+# Estimation of the error with LOO-CV
+for (i in 1:nrow(X)){
+  # Split between train and validation
+  train = seq(1,nrow(X))[-i]
+  
+  # LDA
+  lda.out = lda(X[train,],Y[train])
+  yhat = predict(lda.out,X[-train,])$class
+  ErrCV.LDA[i] = sum(yhat != Y[-train]) / length(yhat)
+  
+  # Logistic regression
+  f = glm(Status ~ .,data = banknote, subset = train,family = 'binomial')
+  log.out = predict(f,newdata = X[-train,])
+  yhat = as.numeric(log.out > 0) + 1 
+  ErrCV.LReg[i] = sum(yhat != as.numeric(Y[-train])) / sum(yhat)
+  
+  # KNN (k = kstar)
+  knn.out = knn(X[train,],X[-train,],Y[train],k=kstar)
+  ErrCV.kNN[i] = sum(knn.out != Y[-train]) / length(knn.out)
+}
+Err = cbind(ErrCV.kNN,ErrCV.LDA,ErrCV.LReg)
+colMeans(Err)
+apply(Err,2,sd)
+```
+
+Based on those results, we can recommend to put in production either 1-NN or LDA to classify the banknotes, and we expect a future classification error of 0.5% (sd 0.07).
+
+
+
+## Application to the Swiss data
+
+> Exercise: compare KNN, LDA and LogReg for classifying those data, thanks to LOO-CV.
+
+
+```{r warning=FALSE}
+data(swiss)
+swiss
+X = swiss[,-5]
+Y = as.numeric(swiss$Catholic >= 50)
+# S = X; S$Y = Y
+
+# Choice of k for kNN
+N = nrow(X)
+ErrCV = matrix(NA,N,25)
+for (k in 1:25){
+  for (i in 1:N){
+    # Split between train and validation
+    train = seq(1,N)[-i]
+    
+    # Learning step
+    out = knn(X[train,],X[-train,],Y[train],k=k)
+    
+    # compute the error
+    ErrCV[i,k] = sum(out != Y[-train])
+  }
+}
+
+plot(colMeans(ErrCV),type='b')
+kstar = which.min(colMeans(ErrCV))
+
+# Comparison of the three methods
+ErrCV.kNN = rep(NA,N)
+ErrCV.LDA = rep(NA,N)
+ErrCV.LReg = rep(NA,N)
+
+# Estimation of the error with LOO-CV
+for (i in 1:N){
+  # Split between train and validation
+  train = seq(1,N)[-i]
+  
+  # LDA
+  f = lda(X[train,],Y[train])
+  yhat = predict(f,X[-train,])$class
+  ErrCV.LDA[i] = sum(yhat != Y[-train])
+  
+  # Logistic regression
+  f = glm(Y ~ .,data = X, subset = train, family = 'binomial')
+  out = predict(f,newdata = X[-train,])
+  yhat = as.numeric(out > 0)
+  ErrCV.LReg[i] = sum(yhat != Y[-train])
+  
+  # KNN (k = kstar)
+  out = knn(X[train,],X[-train,],Y[train],k=kstar)
+  ErrCV.kNN[i] = sum(out != Y[-train]) / length(out)
+}
+Err = cbind(ErrCV.kNN,ErrCV.LDA,ErrCV.LReg)
+colMeans(Err)
+apply(Err,2,sd)
+```
+
+## Support Vector Machines SVM
+
+```{r}
+# install.packages("e1071")
+library(e1071)
+```
+
+Let's first test SVM with the linear kernel on the iris dataset and compare it with LDA
+
+```{r}
+# Comparison of the three methods
+N = nrow(X)
+ErrCV.SVM = rep(NA,N)
+ErrCV.LDA = rep(NA,N)
+
+# Estimation of the error with LOO-CV
+for (i in 1:N){
+  # Split between train and validation
+  train = seq(1,N)[-i]
+  
+  # LDA
+  f = lda(X[train,],Y[train])
+  yhat = predict(f,X[-train,])$class
+  ErrCV.LDA[i] = sum(yhat != Y[-train])
+  
+  # SVM
+  model = svm(X[train,], Y[train], type='C-classification', kernel = 'linear')
+  yhat = predict(model, X[-train,])
+  ErrCV.SVM[i] = sum(yhat != Y[-train])
+  
+}
+Err = cbind(ErrCV.SVM,ErrCV.LDA)
+colMeans(Err)
+apply(Err,2,sd)
+```
+
+> Exercise: try with the RBF kernel with gamma = 0.5
+
+```{r}
+# Comparison of the three methods
+ErrCV.SVM = rep(NA,nrow(X))
+ErrCV.LDA = rep(NA,nrow(X))
+# Estimation of the error with LOO-CV
+for (i in 1:nrow(X)){
+  # Split between train and validation
+  train = seq(1,nrow(X))[-i]
+  
+  # LDA
+  f = lda(X[train,],Y[train])
+  yhat = predict(f,X[-train,])$class
+  ErrCV.LDA[i] = sum(yhat != Y[-train]) 
+  
+  # SVM
+  model = svm(X[train,],Y[train],type='C-classification',
+              kernel = "radial",gamma = 0.5)
+  yhat =  predict(model,X[-train,])
+  ErrCV.SVM[i] = sum(yhat != Y[-train]) 
+}
+Err = cbind(ErrCV.SVM,ErrCV.LDA)
+colMeans(Err)
+apply(Err,2,sd)
+```
+
+
+Exercice: try to find the best value of gamma with the RBF kernel
+
+```{r}
+# Find the best value of gamma
+N = nrow(X)
+gammas = c((1:10)/100,0.1+(1:10)/100) # values are chosen in order to reach a minimum of the error when gamma increases (plot below)
+ErrCV = matrix(NA,N,length(gammas))
+
+for (j in 1:length(gammas)){
+  for (i in 1:N){
+    # Split between train and validation
+    train = seq(1,N)[-i]
+    
+    # Learning step
+    model = svm(X[train,], Y[train], type='C-classification', kernel = 'radial', gamma = gammas[j])
+    yhat = predict(model, X[-train,])
+    
+    # compute the error
+    ErrCV[i,j] = sum(yhat != Y[-train])
+  }
+}
+
+plot(gammas, colMeans(ErrCV), type='b')
+bestgamma = gammas[which.min(colMeans(ErrCV))]
+
+# Comparison of the three methods
+ErrCV.SVM = rep(NA,N)
+ErrCV.LDA = rep(NA,N)
+
+# Estimation of the error with LOO-CV
+for (i in 1:N){
+  # Split between train and validation
+  train = seq(1,N)[-i]
+  
+  # LDA
+  f = lda(X[train,],Y[train])
+  yhat = predict(f,X[-train,])$class
+  ErrCV.LDA[i] = sum(yhat != Y[-train])
+  
+  # SVM
+  model = svm(X[train,], Y[train], type='C-classification', kernel = 'radial', gamma = bestgamma)
+  yhat = predict(model, X[-train,])
+  ErrCV.SVM[i] = sum(yhat != Y[-train])
+  
+}
+Err = cbind(ErrCV.SVM,ErrCV.LDA)
+colMeans(Err)
+apply(Err,2,sd)
+```
+
+
+Exercice: Compare all methods (kNN, LDA, QDA, SVM) on the wine dataset
+
+```{r warning=FALSE}
+data(swiss)
+swiss
+N = nrow(X)
+X = swiss[,-5]
+Y = as.numeric(swiss$Catholic >= 50)
+# S = X; S$Y = Y
+
+
+
+# Choice of k for kNN
+
+ErrCV = matrix(NA,N,25)
+for (k in 1:25){
+  for (i in 1:N){
+    # Split between train and validation
+    train = seq(1,N)[-i]
+    
+    # Learning step
+    out = knn(X[train,],X[-train,],Y[train],k=k)
+    
+    # compute the error
+    ErrCV[i,k] = sum(out != Y[-train])
+  }
+}
+plot(colMeans(ErrCV),type='b')
+kstar = which.min(colMeans(ErrCV))
+
+
+# Choice of gamma for SVM RBF
+
+gammas = c((1:10)/100,0.1+(1:10)/100) # values are chosen in order to reach a minimum for the error when gamma increases (plot below)
+ErrCV2 = matrix(NA,N,length(gammas))
+for (j in 1:length(gammas)){
+  for (i in 1:N){
+    # Split between train and validation
+    train = seq(1,N)[-i]
+    
+    # Learning step
+    out2 = svm(X[train,], Y[train], type='C-classification', kernel = 'radial', gamma = gammas[j])
+    yhat = predict(out2, X[-train,])
+    
+    # compute the error
+    ErrCV2[i,j] = sum(yhat != Y[-train])
+  }
+}
+plot(gammas, colMeans(ErrCV2), type='b')
+bestgamma = gammas[which.min(colMeans(ErrCV2))]
+
+
+
+# Comparison of the three methods
+
+ErrCV.kNN = rep(NA,N)
+ErrCV.LReg = rep(NA,N)
+ErrCV.LDA = rep(NA,N)
+ErrCV.QDA = rep(NA,N)
+ErrCV.SVM = rep(NA,N)
+
+# Estimation of the error with LOO-CV
+for (i in 1:N){
+  # Split between train and validation
+  train = seq(1,nrow(X))[-i]
+
+  # KNN (k = kstar)
+  knn.out = knn(X[train,],X[-train,],Y[train],k=kstar)
+  ErrCV.kNN[i] = sum(knn.out != Y[-train]) / length(knn.out)
+  
+  # Logistic regression
+  lreg.model = glm(Y ~ .,data = X, subset = train, family = 'binomial')
+  lreg.out = predict(lreg.model,newdata = X[-train,])
+  lreg.yhat = as.numeric(lreg.out > 0)
+  ErrCV.LReg[i] = sum(lreg.yhat != Y[-train])
+    
+  # LDA
+  lda.model = lda(X[train,], Y[train])
+  lda.yhat = predict(lda.model, X[-train,])$class
+  ErrCV.LDA[i] = sum(lda.yhat != Y[-train])
+  
+  # QDA
+  qda.model = qda(X[train,], Y[train])
+  qda.yhat = predict(qda.model, X[-train,])$class
+  ErrCV.QDA[i] = sum(qda.yhat != Y[-train])
+  
+  # SVM (gamma = bestgamma)
+  svm.model = svm(X[train,], Y[train], type='C-classification', kernel = 'radial', gamma = bestgamma)
+  svm.yhat = predict(svm.model, X[-train,])
+  ErrCV.SVM[i] = sum(svm.yhat != Y[-train])
+  
+}
+Err = cbind(ErrCV.kNN, ErrCV.LReg, ErrCV.LDA, ErrCV.QDA, ErrCV.SVM)
+sort(colMeans(Err), decreasing = TRUE)
+# apply(Err,2,sd)
+```

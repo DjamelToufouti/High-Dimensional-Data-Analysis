@@ -1,0 +1,338 @@
+---
+title: "Clustering"
+output: github_document
+---
+
+# Clustering
+
+## The kmeans
+
+This method is available in R in the package `class`:
+
+```{r}
+library(class)
+```
+
+Let's consider again the `swiss` data for illustrating the use of kmeans:
+
+```{r}
+data("swiss")
+
+kmeans.out  = kmeans(swiss, centers = 3)
+kmeans.out
+```
+
+A simple way to look at the clustering:
+
+```{r}
+pairs(swiss,col = kmeans.out$cluster, pch=19)
+```
+
+Of course, it usually first necessary to find the right value for K:
+
+```{r}
+J = c()
+for (k in 1:15){
+  kmeans.out = kmeans(swiss, centers = k, nstart = 10)
+  J[k] = kmeans.out$betweenss / kmeans.out$totss
+}
+
+plot(J,type='b')
+
+Kstar = 4 # my choice!
+```
+
+let's run the algorithm again with the optimized value of k
+
+```{r}
+kmeans.out = kmeans(swiss,centers = Kstar, nstart = 10)
+kmeans.out
+```
+
+```{r}
+pairs(swiss, col = kmeans.out$cluster, pch=19)
+```
+
+
+
+## The hierarchical clustering
+
+The hierarchical clustering is available in R within the `class` package:
+
+```{r}
+library(class)
+```
+
+> Notice that the input data are not the actual data but a distance matrix between all obseravtions
+
+```{r}
+D = dist(swiss) # Compute the distance matrix between all observations => this will avoid a lot of computations when calling hclust function
+hc.out = hclust(D,method='complete')
+hc.out
+```
+
+
+To look at the result, we have to plot the dendrogram:
+
+```{r}
+plot(hc.out)
+```
+
+When looking at this dendrogram, we may choose to cut the tree at K=3. In order to obtain the final clustering partition we have to "cut the tree" at the level k = 3:
+
+```{r}
+cl = cutree(hc.out, k = 3)
+cl
+```
+
+It is also possible to exploit the numerical values that are stored in the 'hc.out' vector to draw a similar curve as for k-means and choose k:
+
+```{r}
+plot(hc.out$height, type = 'b')
+```
+
+From this figure (which goes from K=N to K=1 because of the nature of the hierarchical algorithm) one may pick K=3 or 4.
+
+> Exercice: run 'hclust' with the different distances for K=3 and compare the results
+
+
+```{r}
+hc.out = list()
+hc.out[[1]] = hclust(D,method='complete')
+hc.out[[2]] = hclust(D,method='single')
+hc.out[[3]] = hclust(D,method='ward.D2')
+hc.out[[4]] = hclust(D,method='centroid')
+
+par(mfrow=c(2,2))
+for (i in 1:4) plot(hc.out[[i]])
+```
+
+According to the form of the dentrograms we should keep only Ward and Complte (the 3 other ones have the stair form which is the mark of an abnormal clsutering). Fo Ward, an appropriate K would be 2 and 3 for Complete.
+
+Let's now cut the trees and look at the results using the pair plot:
+
+```{r}
+cl1 = cutree(hc.out[[1]], k=3)
+cl3 = cutree(hc.out[[3]], k=2)
+
+pairs(swiss, col=cl1, pch=19)
+pairs(swiss, col=cl3, pch=19)
+```
+
+In my opinion, the "complete with K=3" result is the most meaningfull because it allows to better understand the swiss society of this period.
+
+> Exercice: compare the results of kmeans and hclust
+
+
+```{r}
+# Hclust
+pairs(swiss, col=cl1, pch=19)
+
+# k-means
+kmeans.out  = kmeans(swiss, centers = 4, nstart =10)
+pairs(swiss,col = kmeans.out$cluster, pch=19)
+
+
+```
+
+Here we see how the clustering is helpful to understand the data without any prior knowledge of the historical period.
+=> Clustering is a powerful tool to reveal the information hidden in data sets
+
+
+## The EM algorithm and the Gaussian mixture model (GMM)
+
+Let's first try to code a simple EM algorithm for a GMM with fixed covariance matrices to simplify:
+
+$$p(x,\theta) = \sum_{k=1}^K \pi_k \mathcal{N}(x; \mu_k, I)$$
+```{r}
+myEM <- function(X,K,maxit=20){
+  # This algo implements EM for bivariate data
+  n = length(x)
+  P = matrix(NA,nrow = n, ncol = K)
+  prop = rep(1/K, K)
+  mu = rnorm(K,0,1)
+  
+  for(it in 1:maxit){
+    # E step
+    for (k in 1:K){
+      P[,k] = prop[k] * dnorm(x, mean=mu[k], sd=1)
+    }
+    P = P / t(t(rowSums(P)))%*%matrix(1, nrow=1, ncol=K) # normalization of the post probas
+    
+    # M step
+    for (k in 1:K){
+      prop[k] = sum(P[,k]) / n
+      mu[k] = sum(P[,k]*x) / sum(P[,k])
+    }
+    
+    # plots the means
+    plot(cbind(x, rep(0,300)), col=max.col(P), ylim=c(-0.5,0.5))
+    lines(density(x), col ='green')
+    points(cbind(mu, rep(0,K)), type='p', pch=19, col=1:K, cex=3)
+    lines(density(x[max.col(P)==1]), col ='black')
+    lines(density(x[max.col(P)==2]), col ='red')
+    Sys.sleep(1)
+  }
+  out = list(P=P, prop=prop, mu=mu)  
+}
+
+# To test this code let's simulate some data
+x = c(rnorm(100,-2,1), rnorm(200,0.5,1))
+y = rep(1:2, c(100,200))
+plot(cbind(x,rep(0,300)), col=y, ylim=c(-0.5,0.5))
+lines(density(x), col='green')
+
+# Run EM on this example
+out = myEM(x,2)
+```
+
+This small piece of code allowed us to have a look at the effect of each iteration of the EM algorithm on the means, the proportions and the cluster memberships.
+
+Let's now consider a real case with th swiss data and with a more serious code with the Mclust package. This is probably the most popular package for performing model-based clustering?
+
+```{r}
+#install.packages('mclust')
+library(mclust)
+```
+
+Exercice: use mclust to cluster the swiss data
+
+```{r}
+data("swiss")
+
+library('mclust')
+
+GMM.out  = Mclust(swiss)
+GMM.out
+summary(GMM.out)
+
+plot(GMM.out, what = c("BIC"))
+plot(GMM.out, what = c("classification"))
+plot(GMM.out, what = c("uncertainty"))
+```
+
+On this example, the mclust clustering looks very similar to the one provided by hclust with the complete linkage.
+
+
+With uncertainty pairs, the larger is the point, the larger is the clustering uncertainty. Thisvinformation is directly extract from the output of the algorithm.
+
+```{r}
+round(GMM.out$z,3)
+```
+
+It is also possible to look at the mixture means (and also variances)
+
+```{r}
+GMM.out$parameters$mean
+```
+
+
+> Remark: Other packages implement as well the GMM algorithm for continous data but also for categorical ones. For instance the 'Rmixmod' package allows to deal with both.
+
+> Exercice: cluster the wine data with mclust and evaluate the quality of the clustering regarding the known labels.
+
+```{r}
+library('MBCbook')
+data("wine27")
+X = wine27[,1:27] # remove categorical variables
+Y = wine27$Type # Type is the solution that we want to compare to
+
+GMM.out  = Mclust(X)
+GMM.out
+summary(GMM.out)
+
+round(GMM.out$z,3)
+GMM.out$parameters$mean
+GMM.out$classification
+
+plot(GMM.out, what = c("BIC"))
+```
+
+A way to compare the clustering with the true partition is to display the confusion matrix:
+
+```{r}
+table(Y, GMM.out$classification)
+```
+
+Compare confusion matrix with K means
+
+```{r}
+# k-means
+kmeans.out  = kmeans(X, centers = 3, nstart =10)
+table(Y, kmeans.out$cluster)
+```
+
+On this specific example kmeans turns out to find clusters that are very different than the ones of mclust and the true partition.
+
+# Dimension reduction (using PCA)
+
+Let's consider the 'decathlon data' which are availlable in the FactoMineR package.
+
+```{r}
+# install.packages("FactoMineR")
+library(FactoMineR)
+
+data(decathlon)
+X = decathlon[,1:10]
+X
+```
+
+To perform PCA we use 'princomp' function 
+
+```{r}
+pc = princomp(X)
+pc
+```
+
+We now need to select the number of components to retain:
+
+```{r}
+summary(pc)
+```
+
+If we apply the rule of the 90% then 2 componenets are enough on this example (93;21% > 90%)
+
+```{r}
+screeplot(pc)
+```
+
+If we apply the rule of the 'break' in the eigenvalue scree then we prefer d=3 here.
+
+If we apply the scree-test of Cattell:
+
+```{r}
+diff = abs(diff(pc$sdev))
+plot(diff, type='b')
+abline(h = 0.1*max(diff), lty=2, col='blue')
+```
+
+This test also recommends to pick d=3
+
+The corellation circle may be obtained thanks to the 'biplot' function:
+
+```{r}
+biplot(pc)
+```
+
+In the FactoMineR package there is a more clear visualization
+
+```{r}
+pca = PCA(X, scale.unit = TRUE)
+plot(pca)
+```
+
+# Clustering in High Dimension
+
+
+```{r}
+#install.packages('HDclassif')
+library(HDclassif)
+
+data("wine27")
+X = scale(wine27[,1:27]) # scale is used when data have different units
+Y = wine27$Type
+
+out = hddc (X,3)
+
+table(Y, out$cl)
+```
